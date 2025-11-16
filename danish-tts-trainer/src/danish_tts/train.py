@@ -142,7 +142,7 @@ def train_step(
     )
 
     # Duration loss (if model returns durations)
-    loss_dur = 0
+    loss_dur = torch.tensor(0.0, device=device)
     if "durations" in outputs and "target_durations" in batch:
         loss_dur = losses["duration"](
             outputs["durations"],
