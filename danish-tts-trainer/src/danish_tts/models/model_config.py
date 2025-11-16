@@ -202,6 +202,13 @@ class StyleTTS2Model(nn.Module):
         # Downsample text_enc by 2 to match F0/N after their stride=2 conv
         # Using average pooling with kernel_size=2, stride=2
         import torch.nn.functional as F
+
+        # Ensure minimum length before downsampling (need at least 2 frames after downsampling)
+        min_text_len = 4  # Will become 2 after downsampling
+        if text_enc.shape[2] < min_text_len:
+            pad_len = min_text_len - text_enc.shape[2]
+            text_enc = F.pad(text_enc, (0, pad_len), mode='constant', value=0)
+
         text_enc_downsampled = F.avg_pool1d(text_enc, kernel_size=2, stride=2)  # [batch, channels, seq_len//2]
         downsampled_seq_len = text_enc_downsampled.shape[2]
 
@@ -320,6 +327,13 @@ class StyleTTS2Model(nn.Module):
 
         # Prepare inputs for iSTFTNet decoder (same as forward())
         import torch.nn.functional as F
+
+        # Ensure minimum length before downsampling (need at least 2 frames after downsampling)
+        min_text_len = 4  # Will become 2 after downsampling
+        if text_enc.shape[2] < min_text_len:
+            pad_len = min_text_len - text_enc.shape[2]
+            text_enc = F.pad(text_enc, (0, pad_len), mode='constant', value=0)
+
         text_enc_downsampled = F.avg_pool1d(text_enc, kernel_size=2, stride=2)
         downsampled_seq_len = text_enc_downsampled.shape[2]
 
