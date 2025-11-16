@@ -296,9 +296,7 @@ def main():
 
     # Initialize G2P
     print("Loading Danish G2P...")
-    import sys
-    sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "misaki"))
-    from misaki.da import G2P
+    from danish_tts.g2p_da import G2P
     g2p = G2P()
 
     # Setup model

@@ -4,9 +4,7 @@ import pytest
 import torch
 from pathlib import Path
 from danish_tts.data.tts_dataset import TTSDataset
-import sys
-sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "misaki"))
-from misaki.da import G2P
+from danish_tts.g2p_da import G2P
 
 
 def test_tts_dataset_initialization():

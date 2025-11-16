@@ -8,7 +8,7 @@ import soundfile as sf
 from tqdm import tqdm
 
 from danish_tts.inference import load_model, synthesize
-from misaki.da import G2P
+from danish_tts.g2p_da import G2P
 
 
 def load_test_sentences(filepath: Path) -> List[str]:

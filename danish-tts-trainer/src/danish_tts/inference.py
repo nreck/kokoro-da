@@ -6,10 +6,7 @@ import torch
 import soundfile as sf
 import sys
 
-# Add misaki to path
-sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "misaki"))
-
-from misaki.da import G2P
+from danish_tts.g2p_da import G2P
 
 
 @torch.no_grad()
