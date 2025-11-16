@@ -507,7 +507,7 @@ def main():
             else:
                 accumulation_counter += 1
                 # Clear cache during accumulation to prevent buildup
-                if accumulation_counter % 8 == 0:
+                if accumulation_counter % 4 == 0:  # More frequent clearing
                     torch.cuda.empty_cache()
                 continue  # Skip discriminator and logging until accumulation is done
 

@@ -147,7 +147,7 @@ class StyleTTS2Model(nn.Module):
             # For 80+ mel frames: (n_samples - n_fft) // hop_length + 1 >= 80
             # (n_samples - 2048) // 300 + 1 >= 80
             # n_samples >= 79 * 300 + 2048 = 25748 samples
-            min_len = 26000  # Ensures at least 80 mel frames after STFT
+            min_len = 25748  # Exact minimum for 80 mel frames (saves memory)
             original_len = ref_audio.shape[-1]
             if ref_audio.shape[-1] < min_len:
                 pad_len = min_len - ref_audio.shape[-1]
@@ -238,7 +238,7 @@ class StyleTTS2Model(nn.Module):
         # Ensure minimum audio length for STFT (match ref_audio padding)
         # For 80+ mel frames: (n_samples - n_fft) // hop_length + 1 >= 80
         # n_samples >= 79 * 300 + 2048 = 25748 samples
-        min_len = 26000  # Ensures at least 80 mel frames after STFT
+        min_len = 25748  # Exact minimum for 80 mel frames (saves memory)
         if predicted_audio.shape[-1] < min_len:
             pad_len = min_len - predicted_audio.shape[-1]
             predicted_audio = torch.nn.functional.pad(predicted_audio, (0, pad_len), mode='constant', value=0)
