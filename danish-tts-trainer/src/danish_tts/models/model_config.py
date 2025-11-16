@@ -145,8 +145,8 @@ class StyleTTS2Model(nn.Module):
 
             # Ensure minimum audio length for STFT
             # For 80 mel frames with hop_length=300: need at least 80*300=24000 samples
-            # Add margin for STFT window (n_fft=2048)
-            min_len = 24000 + 2048
+            # This gives exactly what StyleEncoder needs after 4x downsampling
+            min_len = 24000
             original_len = ref_audio.shape[-1]
             if ref_audio.shape[-1] < min_len:
                 pad_len = min_len - ref_audio.shape[-1]
@@ -227,8 +227,8 @@ class StyleTTS2Model(nn.Module):
             predicted_audio = predicted_audio.squeeze(1)
 
         # Ensure minimum audio length for STFT (match ref_audio padding)
-        # For 80 mel frames: 80*300 + 2048 for STFT window
-        min_len = 24000 + 2048
+        # For 80 mel frames: 80*300 = 24000 samples
+        min_len = 24000
         if predicted_audio.shape[-1] < min_len:
             pad_len = min_len - predicted_audio.shape[-1]
             predicted_audio = torch.nn.functional.pad(predicted_audio, (0, pad_len), mode='constant', value=0)

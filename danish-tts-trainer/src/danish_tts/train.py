@@ -157,6 +157,10 @@ def train_step(
         loss_weights.get("duration", 1.0) * loss_dur
     )
 
+    # Scale loss by gradient accumulation steps for proper averaging
+    gradient_accumulation_steps = config["training"].get("gradient_accumulation_steps", 1)
+    total_loss = total_loss / gradient_accumulation_steps
+
     # Backward pass
     if do_backward:
         total_loss.backward()
@@ -171,7 +175,7 @@ def train_step(
         optimizer.step()
 
     return {
-        "total_loss": total_loss.item(),
+        "total_loss": total_loss.item() * gradient_accumulation_steps,  # Unscale for logging
         "reconstruction_loss": loss_recon.item(),
         "kl_loss": loss_kl.item(),
         "duration_loss": loss_dur.item() if isinstance(loss_dur, torch.Tensor) else 0,
@@ -434,11 +438,19 @@ def main():
             # Generator step (with gradient accumulation)
             is_accumulation_step = (accumulation_counter < gradient_accumulation_steps - 1)
 
-            loss_dict = train_step(model, batch, optimizer, config, losses)
+            # Pass gradient accumulation flags to train_step
+            loss_dict = train_step(
+                model, batch, optimizer, config, losses,
+                do_backward=True,  # Always backward for accumulation
+                do_step=not is_accumulation_step  # Only step when done accumulating
+            )
 
             # Only step optimizer after accumulating enough gradients
             if not is_accumulation_step:
                 accumulation_counter = 0
+                # Clear cache after optimizer step to free memory
+                if step % 10 == 0:  # Every 10 steps
+                    torch.cuda.empty_cache()
             else:
                 accumulation_counter += 1
                 continue  # Skip discriminator and logging until accumulation is done
