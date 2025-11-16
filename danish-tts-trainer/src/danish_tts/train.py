@@ -70,11 +70,14 @@ def setup_dataloader(config: dict, g2p, split: str = "train") -> DataLoader:
 
     dataset_to_use = train_dataset if split == "train" else val_dataset
 
+    # Use fewer workers for validation to avoid espeak-ng thread safety issues
+    num_workers = config["training"]["num_workers"] if split == "train" else 0
+
     dataloader = DataLoader(
         dataset_to_use,
         batch_size=config["training"]["batch_size"],
         shuffle=(split == "train"),
-        num_workers=config["training"]["num_workers"],
+        num_workers=num_workers,
         collate_fn=collate_fn,
         pin_memory=True,
     )
@@ -373,6 +376,7 @@ def main():
 
     print(f"Train samples: {len(train_loader.dataset)}")
     print(f"Val samples: {len(val_loader.dataset)}")
+    print(f"Validation using single-threaded DataLoader (espeak-ng thread safety)")
 
     # Setup optimizer
     optimizer = torch.optim.Adam(
@@ -389,14 +393,14 @@ def main():
     if use_amp:
         if amp_dtype == "bfloat16" and torch.cuda.is_bf16_supported():
             print("Using bfloat16 mixed precision training")
-            amp_context = torch.cuda.amp.autocast(dtype=torch.bfloat16)
+            amp_context = torch.amp.autocast('cuda', dtype=torch.bfloat16)
         else:
             print("Using float16 mixed precision training")
-            amp_context = torch.cuda.amp.autocast(dtype=torch.float16)
+            amp_context = torch.amp.autocast('cuda', dtype=torch.float16)
             scaler = torch.cuda.amp.GradScaler()
     else:
         print("Mixed precision training disabled")
-        amp_context = torch.cuda.amp.autocast(enabled=False)
+        amp_context = torch.amp.autocast('cuda', enabled=False)
 
     # Setup losses
     from danish_tts.losses import ReconstructionLoss, KLDivergenceLoss, AdversarialLoss, DurationLoss
