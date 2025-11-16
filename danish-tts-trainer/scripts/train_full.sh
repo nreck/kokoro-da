@@ -16,8 +16,17 @@ mkdir -p "checkpoints/${EXPERIMENT_NAME}"
 # Set environment variables
 export PYTHONPATH="${PYTHONPATH}:$(pwd)/src"
 export CUDA_VISIBLE_DEVICES=0  # Set GPU
-export PHONEMIZER_ESPEAK_LIBRARY=/opt/homebrew/lib/libespeak-ng.dylib
-export PHONEMIZER_ESPEAK_PATH=/opt/homebrew/bin/espeak-ng
+
+# Set espeak-ng paths (Linux or macOS)
+if [ -f "/usr/lib/x86_64-linux-gnu/libespeak-ng.so" ]; then
+    # Linux
+    export PHONEMIZER_ESPEAK_LIBRARY=/usr/lib/x86_64-linux-gnu/libespeak-ng.so
+    export PHONEMIZER_ESPEAK_PATH=/usr/bin/espeak-ng
+else
+    # macOS
+    export PHONEMIZER_ESPEAK_LIBRARY=/opt/homebrew/lib/libespeak-ng.dylib
+    export PHONEMIZER_ESPEAK_PATH=/opt/homebrew/bin/espeak-ng
+fi
 
 # Print system info
 echo "========================================="
