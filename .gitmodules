@@ -1,0 +1,12 @@
+[submodule "StyleTTS2"]
+	path = StyleTTS2
+	url = https://github.com/yl4579/StyleTTS2.git
+[submodule "coral-tts"]
+	path = coral-tts
+	url = https://huggingface.co/datasets/CoRal-project/coral-tts
+[submodule "kokoro"]
+	path = kokoro
+	url = https://github.com/hexgrad/kokoro.git
+[submodule "misaki"]
+	path = misaki
+	url = https://github.com/hexgrad/misaki.git
