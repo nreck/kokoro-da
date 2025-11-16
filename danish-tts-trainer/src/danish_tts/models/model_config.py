@@ -144,9 +144,9 @@ class StyleTTS2Model(nn.Module):
                 ref_audio = ref_audio.unsqueeze(0)
 
             # Ensure minimum audio length for STFT
-            # For 80 mel frames with hop_length=300: need at least 80*300=24000 samples
-            # This gives exactly what StyleEncoder needs after 4x downsampling
-            min_len = 24000
+            # For 60 mel frames with hop_length=300: need at least 60*300=18000 samples
+            # Reduced from 80 to 60 frames for memory optimization
+            min_len = 18000
             original_len = ref_audio.shape[-1]
             if ref_audio.shape[-1] < min_len:
                 pad_len = min_len - ref_audio.shape[-1]
@@ -168,7 +168,8 @@ class StyleTTS2Model(nn.Module):
             # StyleEncoder has 4x ResBlk(downsample='half') that divide BOTH dims by 2
             # After 4 downsamplings: [1, 80, T] -> [dim, 5, T/16]
             # Final Conv2d(5, 1, 0) needs at least 5x5, so T/16 >= 5 -> T >= 80
-            min_time = 80  # Require at least 80 time frames for 5 frames after downsampling
+            # But reduce to 60 for memory optimization (60/16=3.75, pad to 5 after)
+            min_time = 60  # Reduced for memory, will be padded if needed
             _, _, n_mels, time_frames = mel.shape
             if time_frames < min_time:
                 pad_w = min_time - time_frames
@@ -234,8 +235,8 @@ class StyleTTS2Model(nn.Module):
             predicted_audio = predicted_audio.squeeze(1)
 
         # Ensure minimum audio length for STFT (match ref_audio padding)
-        # For 80 mel frames: 80*300 = 24000 samples
-        min_len = 24000
+        # For 60 mel frames: 60*300 = 18000 samples (reduced for memory)
+        min_len = 18000
         if predicted_audio.shape[-1] < min_len:
             pad_len = min_len - predicted_audio.shape[-1]
             predicted_audio = torch.nn.functional.pad(predicted_audio, (0, pad_len), mode='constant', value=0)
@@ -243,8 +244,8 @@ class StyleTTS2Model(nn.Module):
         predicted_mel = mel_transform(predicted_audio)  # [batch, n_mels, time]
 
         # Ensure minimum mel size for any subsequent processing
-        # Match the minimum from style encoder (80 frames for T/16 >= 5)
-        min_mel_time = 80
+        # Match the minimum from style encoder (60 frames, reduced for memory)
+        min_mel_time = 60
         if predicted_mel.shape[2] < min_mel_time:
             pad_w = min_mel_time - predicted_mel.shape[2]
             predicted_mel = torch.nn.functional.pad(predicted_mel, (0, pad_w, 0, 0), mode='constant', value=0)

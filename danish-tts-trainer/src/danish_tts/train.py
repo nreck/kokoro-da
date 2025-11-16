@@ -494,11 +494,15 @@ def main():
             # Only step optimizer after accumulating enough gradients
             if not is_accumulation_step:
                 accumulation_counter = 0
+                optimizer.zero_grad()  # Explicitly clear gradients after step
                 # Clear cache after optimizer step to free memory
-                if step % 10 == 0:  # Every 10 steps
+                if step % 5 == 0:  # Every 5 steps (more aggressive)
                     torch.cuda.empty_cache()
             else:
                 accumulation_counter += 1
+                # Clear cache during accumulation to prevent buildup
+                if accumulation_counter % 8 == 0:
+                    torch.cuda.empty_cache()
                 continue  # Skip discriminator and logging until accumulation is done
 
             # Discriminator step (every N steps)
