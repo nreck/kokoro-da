@@ -81,7 +81,7 @@ training:
 
 # Loss weights (tuned for Danish)
 loss:
-  reconstruction: 45.0  # High weight for mel reconstruction
+  reconstruction: 1.0  # Reduced from 45.0 for stability
   adversarial: 1.0  # GAN discriminator loss
   style_kl: 1.0  # KL divergence on style latent
   duration: 1.0  # Duration prediction loss

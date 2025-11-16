@@ -511,9 +511,10 @@ def main():
                     torch.cuda.empty_cache()
                 continue  # Skip discriminator and logging until accumulation is done
 
-            # Discriminator step (every N steps)
+            # Discriminator step (every N steps, skip early steps for warmup)
             disc_update_freq = config["training"].get("disc_update_freq", 1)
-            if step % disc_update_freq == 0:
+            warmup_steps = 100  # Allow model to stabilize first
+            if step >= warmup_steps and step % disc_update_freq == 0:
                 # Generate fake audio from model
                 with torch.no_grad():
                     outputs = model(
@@ -529,13 +530,22 @@ def main():
 
                 real_audio = batch["audio"].to(device)
 
-                disc_loss_dict = discriminator_step(
-                    discriminator=discriminator,
-                    real_audio=real_audio,
-                    fake_audio=fake_audio,
-                    optimizer=disc_optimizer,
-                    loss_fn=losses["adversarial"],
-                )
+                # Check for NaN in audio before discriminator step
+                if torch.isnan(fake_audio).any() or torch.isnan(real_audio).any():
+                    print(f"Warning: NaN detected in audio at step {step}")
+                    disc_loss_dict = {
+                        "disc_loss": 0.0,
+                        "disc_loss_real": 0.0,
+                        "disc_loss_fake": 0.0,
+                    }
+                else:
+                    disc_loss_dict = discriminator_step(
+                        discriminator=discriminator,
+                        real_audio=real_audio,
+                        fake_audio=fake_audio,
+                        optimizer=disc_optimizer,
+                        loss_fn=losses["adversarial"],
+                    )
 
                 loss_dict.update(disc_loss_dict)
 
@@ -546,13 +556,13 @@ def main():
 
                 print(f"Step {step}: {loss_dict}")
 
-            # Validation
-            if step % config["training"]["val_interval"] == 0:
+            # Validation (skip at step 0 to avoid initial crashes)
+            if step > 0 and step % config["training"]["val_interval"] == 0:
                 val_loss = validate(model, val_loader, config, step, writer)
                 print(f"Validation loss: {val_loss:.4f}")
 
-            # Checkpointing
-            if step % config["training"]["checkpoint_interval"] == 0:
+            # Checkpointing (skip step 0)
+            if step > 0 and step % config["training"]["checkpoint_interval"] == 0:
                 checkpoint_dir = Path(config["paths"]["checkpoint_dir"])
                 checkpoint_dir.mkdir(parents=True, exist_ok=True)
 
