@@ -48,7 +48,7 @@ data:
 
 # Training hyperparameters
 training:
-  batch_size: 32  # Increased for full training
+  batch_size: 8  # Reduced to fit in 32GB GPU memory
   num_workers: 8  # More workers for data loading
   max_steps: 600000  # ~600k steps for 48h data
 
@@ -66,7 +66,7 @@ training:
   amp_dtype: "bfloat16"  # Better than float16
 
   # Gradient accumulation for larger effective batch size
-  gradient_accumulation_steps: 2  # Effective batch_size = 32 * 2 = 64
+  gradient_accumulation_steps: 8  # Effective batch_size = 8 * 8 = 64
 
   # Checkpointing
   checkpoint_interval: 5000  # Save every 5k steps
