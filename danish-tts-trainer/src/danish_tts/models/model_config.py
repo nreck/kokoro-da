@@ -144,9 +144,10 @@ class StyleTTS2Model(nn.Module):
                 ref_audio = ref_audio.unsqueeze(0)
 
             # Ensure minimum audio length for STFT
-            # For 60 mel frames with hop_length=300: need at least 60*300=18000 samples
-            # Reduced from 80 to 60 frames for memory optimization
-            min_len = 18000
+            # For 80+ mel frames: (n_samples - n_fft) // hop_length + 1 >= 80
+            # (n_samples - 2048) // 300 + 1 >= 80
+            # n_samples >= 79 * 300 + 2048 = 25748 samples
+            min_len = 26000  # Ensures at least 80 mel frames after STFT
             original_len = ref_audio.shape[-1]
             if ref_audio.shape[-1] < min_len:
                 pad_len = min_len - ref_audio.shape[-1]
@@ -155,11 +156,12 @@ class StyleTTS2Model(nn.Module):
             mel = mel_transform(ref_audio)  # [batch, n_mels, time]
 
             # Debug: check mel dimensions before unsqueeze
-            if mel.shape[2] < 10:
-                print(f"WARNING: Mel too short before style encoder!")
+            if mel.shape[2] < 80:
+                print(f"WARNING: Mel has {mel.shape[2]} frames, need 80+ for StyleEncoder!")
                 print(f"  Original audio length: {original_len}")
                 print(f"  Padded audio length: {ref_audio.shape[-1]}")
                 print(f"  Mel shape before unsqueeze: {mel.shape}")
+                print(f"  Expected frames: {(ref_audio.shape[-1] - 2048) // 300 + 1}")
 
             mel = mel.unsqueeze(1)  # [batch, 1, n_mels, time] for style encoder
 
@@ -234,8 +236,9 @@ class StyleTTS2Model(nn.Module):
             predicted_audio = predicted_audio.squeeze(1)
 
         # Ensure minimum audio length for STFT (match ref_audio padding)
-        # For 60 mel frames: 60*300 = 18000 samples (reduced for memory)
-        min_len = 18000
+        # For 80+ mel frames: (n_samples - n_fft) // hop_length + 1 >= 80
+        # n_samples >= 79 * 300 + 2048 = 25748 samples
+        min_len = 26000  # Ensures at least 80 mel frames after STFT
         if predicted_audio.shape[-1] < min_len:
             pad_len = min_len - predicted_audio.shape[-1]
             predicted_audio = torch.nn.functional.pad(predicted_audio, (0, pad_len), mode='constant', value=0)
