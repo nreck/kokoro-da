@@ -16,6 +16,7 @@ mkdir -p "checkpoints/${EXPERIMENT_NAME}"
 # Set environment variables
 export PYTHONPATH="${PYTHONPATH}:$(pwd)/src"
 export CUDA_VISIBLE_DEVICES=0  # Set GPU
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True  # Reduce memory fragmentation
 
 # Set espeak-ng paths (Linux or macOS)
 if [ -f "/usr/lib/x86_64-linux-gnu/libespeak-ng.so" ]; then
