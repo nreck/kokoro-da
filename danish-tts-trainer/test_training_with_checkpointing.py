@@ -12,7 +12,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
 from danish_tts.models.model_config import build_model, enable_gradient_checkpointing
-from danish_tts.g2p_da import DanishG2P
+from danish_tts.g2p_da import G2P as DanishG2P
 from danish_tts.data.tts_dataset import TTSDataset
 import yaml
 
