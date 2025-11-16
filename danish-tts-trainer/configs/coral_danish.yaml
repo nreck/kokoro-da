@@ -1,0 +1,108 @@
+# Danish StyleTTS2 Training Configuration
+# Based on CoRal TTS dataset
+
+# Model architecture
+model:
+  n_symbols: 42  # Number of Danish phonemes
+  n_speakers: 2  # CoRal has 2 speakers
+  n_languages: 1  # Single language (Danish)
+
+  # Text encoder
+  text_encoder:
+    channels: 256
+    kernel_size: 5
+    depth: 3
+    dropout: 0.1
+
+  # Style encoder (from reference audio)
+  style_encoder:
+    dim: 256
+    n_layers: 3
+    kernel_size: 5
+
+  # Decoder (iSTFTNet - converts text + style -> audio directly)
+  decoder:
+    type: "istftnet"
+    resblock_kernel_sizes: [3, 7, 11]
+    upsample_rates: [10, 5, 3, 2]  # 24000 Hz / (10*5*3*2) = 80 Hz frame rate
+    upsample_initial_channel: 512
+    resblock_dilation_sizes: [[1, 3, 5], [1, 3, 5], [1, 3, 5]]
+    upsample_kernel_sizes: [20, 10, 6, 4]
+    gen_istft_n_fft: 2048
+    gen_istft_hop_size: 300  # 12.5ms at 24kHz
+
+  # Vocoder removed - iSTFTNet decoder produces audio directly
+
+# Training data
+data:
+  coral_data_dir: "../coral-tts"  # Relative to danish-tts-trainer/
+  train_manifest: "data/manifests/train.jsonl"
+  val_manifest: "data/manifests/val.jsonl"
+  sample_rate: 24000
+
+  # Data augmentation
+  augmentation:
+    pitch_shift: 0.0  # No pitch shift for now
+    time_stretch: 0.0  # No time stretch for now
+    add_noise: false
+
+# Training hyperparameters
+training:
+  batch_size: 32  # Increased for full training
+  num_workers: 8  # More workers for data loading
+  max_steps: 600000  # ~600k steps for 48h data
+
+  # Learning rate
+  learning_rate: 2.0e-4
+  warmup_steps: 8000
+  lr_schedule: "warmup_cosine"
+  min_lr: 1.0e-5  # Minimum learning rate for cosine schedule
+
+  # Gradient clipping
+  grad_clip_norm: 5.0
+
+  # Mixed precision for faster training
+  use_amp: true
+  amp_dtype: "bfloat16"  # Better than float16
+
+  # Gradient accumulation for larger effective batch size
+  gradient_accumulation_steps: 2  # Effective batch_size = 32 * 2 = 64
+
+  # Checkpointing
+  checkpoint_interval: 5000  # Save every 5k steps
+  keep_n_checkpoints: 10  # Keep more checkpoints
+
+  # Validation
+  val_interval: 2500  # Validate every 2.5k steps
+  val_samples: 20  # Generate 20 samples during validation
+
+  # Discriminator update frequency
+  disc_update_freq: 1  # Update every step
+
+# Loss weights (tuned for Danish)
+loss:
+  reconstruction: 45.0  # High weight for mel reconstruction
+  adversarial: 1.0  # GAN discriminator loss
+  style_kl: 1.0  # KL divergence on style latent
+  duration: 1.0  # Duration prediction loss
+  pitch: 0.1  # Pitch prediction (if used)
+
+# Discriminator (for adversarial training)
+discriminator:
+  use_wavlm: true  # Enable WavLM discriminator
+  wavlm_hidden: 256
+  wavlm_nlayers: 3
+  wavlm_initial_channel: 64
+  learning_rate: 2.0e-4
+  update_freq: 1  # Update every step
+
+# Logging
+logging:
+  log_interval: 100  # Log every 100 steps
+  tensorboard_dir: "logs/tensorboard"
+  sample_dir: "logs/samples"
+
+# Paths
+paths:
+  checkpoint_dir: "checkpoints"
+  resume_from: null  # Set to checkpoint path to resume

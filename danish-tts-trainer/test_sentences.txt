@@ -1,0 +1,42 @@
+# Danish TTS Test Sentences
+# Cover diverse phonetic phenomena
+
+# Basic sentences
+Dette er en dansk testsætning.
+Jeg hedder Claude og jeg kan tale dansk.
+Hvordan går det med dig i dag?
+
+# Numbers
+Jeg har 1 kat og 2 hunde.
+Tallet er 42.
+Det koster 100 kroner.
+
+# Dates and times
+I dag er det den 16. november 2025.
+Klokken er 15 minutter over 3.
+
+# Stød examples
+En hund (with stød)
+Mange hunde (without stød)
+Et hus (with stød)
+Mange huse (without stød)
+
+# Vowel length contrasts
+Pil (short i) vs. pille (long i)
+Tak (short a) vs. tag (long a)
+
+# Questions vs statements
+Dette er en test.
+Er dette en test?
+
+# Foreign names
+Claude kommer fra San Francisco.
+København er hovedstaden i Danmark.
+
+# Abbreviations
+Dvs. det vil sige.
+Bl.a. dette og hint.
+
+# Complex sentences
+Selvom vejret var dårligt, gik vi en tur i skoven og så mange forskellige fugle.
+Den danske sprogets mange vokaler og stød gør det udfordrende for udenlandske talere.
