@@ -2,7 +2,7 @@
 
 import torch
 import torch.nn as nn
-from typing import Dict
+from typing import Dict, Optional
 from danish_tts.models.models import TextEncoder, StyleEncoder, ProsodyPredictor
 from danish_tts.models.Modules.istftnet import Decoder as iSTFTNetDecoder
 
@@ -367,3 +367,21 @@ class StyleTTS2Model(nn.Module):
             param.requires_grad = False
 
         return self
+
+
+def enable_gradient_checkpointing(model: nn.Module, enable: bool = True):
+    """Enable or disable gradient checkpointing for memory optimization.
+
+    Args:
+        model: StyleTTS2 model instance
+        enable: Whether to enable gradient checkpointing
+    """
+    # Set checkpointing flag for all modules that support it
+    for module in model.modules():
+        if hasattr(module, 'use_checkpointing'):
+            module.use_checkpointing = enable
+
+    if enable:
+        print("Gradient checkpointing ENABLED - trading compute for memory")
+    else:
+        print("Gradient checkpointing DISABLED - using normal forward pass")

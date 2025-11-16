@@ -65,8 +65,12 @@ training:
   use_amp: true
   amp_dtype: "bfloat16"  # Better than float16
 
+  # Gradient checkpointing for memory optimization
+  # Trades computation for memory by recomputing activations during backward pass
+  use_gradient_checkpointing: true
+
   # Gradient accumulation for larger effective batch size
-  gradient_accumulation_steps: 16  # Effective batch_size = 1 * 16 = 16 (further reduced for OOM)
+  gradient_accumulation_steps: 4  # Effective batch_size = 1 * 4 = 4 (minimum viable for training)
 
   # Checkpointing
   checkpoint_interval: 5000  # Save every 5k steps

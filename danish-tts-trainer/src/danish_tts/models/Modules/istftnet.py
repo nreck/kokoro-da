@@ -3,6 +3,7 @@ import torch.nn.functional as F
 import torch.nn as nn
 from torch.nn import Conv1d, ConvTranspose1d, AvgPool1d, Conv2d
 from torch.nn.utils import weight_norm, remove_weight_norm, spectral_norm
+from torch.utils.checkpoint import checkpoint
 from .utils import init_weights, get_padding
 
 import math
@@ -27,6 +28,7 @@ class AdaIN1d(nn.Module):
 class AdaINResBlock1(torch.nn.Module):
     def __init__(self, channels, kernel_size=3, dilation=(1, 3, 5), style_dim=64):
         super(AdaINResBlock1, self).__init__()
+        self.use_checkpointing = True  # Can be disabled if needed
         self.convs1 = nn.ModuleList([
             weight_norm(Conv1d(channels, channels, kernel_size, 1, dilation=dilation[0],
                                padding=get_padding(kernel_size, dilation[0]))),
@@ -63,15 +65,30 @@ class AdaINResBlock1(torch.nn.Module):
         self.alpha2 = nn.ParameterList([nn.Parameter(torch.ones(1, channels, 1)) for i in range(len(self.convs2))])
 
 
+    def _forward_layer(self, x, s, c1, c2, n1, n2, a1, a2):
+        """Forward pass for a single layer - used for checkpointing."""
+        xt = n1(x, s)
+        xt = xt + (1 / a1) * (torch.sin(a1 * xt) ** 2)  # Snake1D
+        xt = c1(xt)
+        xt = n2(xt, s)
+        xt = xt + (1 / a2) * (torch.sin(a2 * xt) ** 2)  # Snake1D
+        xt = c2(xt)
+        return xt + x
+
     def forward(self, x, s):
         for c1, c2, n1, n2, a1, a2 in zip(self.convs1, self.convs2, self.adain1, self.adain2, self.alpha1, self.alpha2):
-            xt = n1(x, s)
-            xt = xt + (1 / a1) * (torch.sin(a1 * xt) ** 2)  # Snake1D
-            xt = c1(xt)
-            xt = n2(xt, s)
-            xt = xt + (1 / a2) * (torch.sin(a2 * xt) ** 2)  # Snake1D
-            xt = c2(xt)
-            x = xt + x
+            if self.training and torch.is_grad_enabled() and self.use_checkpointing:
+                # Use gradient checkpointing during training
+                x = checkpoint(self._forward_layer, x, s, c1, c2, n1, n2, a1, a2, use_reentrant=False)
+            else:
+                # Regular forward pass during inference or when checkpointing disabled
+                xt = n1(x, s)
+                xt = xt + (1 / a1) * (torch.sin(a1 * xt) ** 2)  # Snake1D
+                xt = c1(xt)
+                xt = n2(xt, s)
+                xt = xt + (1 / a2) * (torch.sin(a2 * xt) ** 2)  # Snake1D
+                xt = c2(xt)
+                x = xt + x
         return x
 
     def remove_weight_norm(self):
@@ -303,6 +320,7 @@ class Generator(torch.nn.Module):
     def __init__(self, style_dim, resblock_kernel_sizes, upsample_rates, upsample_initial_channel, resblock_dilation_sizes, upsample_kernel_sizes, gen_istft_n_fft, gen_istft_hop_size):
         super(Generator, self).__init__()
 
+        self.use_checkpointing = True  # Can be disabled if needed
         self.num_kernels = len(resblock_kernel_sizes)
         self.num_upsamples = len(upsample_rates)
         resblock = AdaINResBlock1
@@ -373,10 +391,18 @@ class Generator(torch.nn.Module):
             x = x + x_source
             xs = None
             for j in range(self.num_kernels):
-                if xs is None:
-                    xs = self.resblocks[i*self.num_kernels+j](x, s)
+                if self.training and torch.is_grad_enabled() and self.use_checkpointing:
+                    # Use gradient checkpointing for resblocks during training
+                    if xs is None:
+                        xs = checkpoint(self.resblocks[i*self.num_kernels+j], x, s, use_reentrant=False)
+                    else:
+                        xs += checkpoint(self.resblocks[i*self.num_kernels+j], x, s, use_reentrant=False)
                 else:
-                    xs += self.resblocks[i*self.num_kernels+j](x, s)
+                    # Regular forward pass during inference or when checkpointing disabled
+                    if xs is None:
+                        xs = self.resblocks[i*self.num_kernels+j](x, s)
+                    else:
+                        xs += self.resblocks[i*self.num_kernels+j](x, s)
             x = xs / self.num_kernels
         x = F.leaky_relu(x)
         x = self.conv_post(x)
@@ -416,6 +442,7 @@ class AdainResBlk1d(nn.Module):
     def __init__(self, dim_in, dim_out, style_dim=64, actv=nn.LeakyReLU(0.2),
                  upsample='none', dropout_p=0.0):
         super().__init__()
+        self.use_checkpointing = True  # Can be disabled if needed
         self.actv = actv
         self.upsample_type = upsample
         self.upsample = UpSample1d(upsample)
@@ -454,7 +481,12 @@ class AdainResBlk1d(nn.Module):
         return x
 
     def forward(self, x, s):
-        out = self._residual(x, s)
+        if self.training and torch.is_grad_enabled() and self.use_checkpointing:
+            # Use gradient checkpointing during training
+            out = checkpoint(self._residual, x, s, use_reentrant=False)
+        else:
+            # Regular forward pass during inference or when checkpointing disabled
+            out = self._residual(x, s)
         out = (out + self._shortcut(x)) / math.sqrt(2)
         return out
     
