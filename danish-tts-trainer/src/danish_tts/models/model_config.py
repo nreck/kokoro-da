@@ -146,6 +146,15 @@ class StyleTTS2Model(nn.Module):
             mel = mel_transform(ref_audio)  # [batch, n_mels, time]
             mel = mel.unsqueeze(1)  # [batch, 1, n_mels, time] for style encoder
 
+            # Ensure minimum size for style encoder (kernel_size=5 requires at least 5x5)
+            min_height, min_width = 5, 5
+            _, _, h, w = mel.shape
+            if h < min_height or w < min_width:
+                pad_h = max(0, min_height - h)
+                pad_w = max(0, min_width - w)
+                # Pad: (left, right, top, bottom)
+                mel = torch.nn.functional.pad(mel, (0, pad_w, 0, pad_h), mode='constant', value=0)
+
             style = self.style_encoder(mel)  # [batch, style_dim]
         else:
             # Random style if no reference
