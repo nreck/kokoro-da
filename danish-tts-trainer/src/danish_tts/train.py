@@ -50,10 +50,14 @@ def setup_dataloader(config: dict, g2p, split: str = "train") -> DataLoader:
 
     data_dir = Path(config["data"]["coral_data_dir"])
 
+    # Use phoneme caching for validation to avoid espeak-ng threading issues
+    use_cache = (split == "val")
+
     dataset = TTSDataset(
         data_dir=data_dir,
         g2p=g2p,
         sample_rate=config["data"]["sample_rate"],
+        use_phoneme_cache=use_cache,
     )
 
     # Split dataset into train/val

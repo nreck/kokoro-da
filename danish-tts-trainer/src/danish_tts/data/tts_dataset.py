@@ -24,6 +24,7 @@ class TTSDataset(Dataset):
         g2p,
         sample_rate: int = 24000,
         normalize: bool = True,
+        use_phoneme_cache: bool = False,
     ):
         """Initialize TTS Dataset.
 
@@ -32,10 +33,12 @@ class TTSDataset(Dataset):
             g2p: Danish G2P instance (misaki.da.G2P)
             sample_rate: Target sample rate for audio
             normalize: Whether to normalize audio
+            use_phoneme_cache: Cache all phonemes at init (for validation)
         """
         self.data_dir = Path(data_dir)
         self.g2p = g2p
         self.sample_rate = sample_rate
+        self.use_phoneme_cache = use_phoneme_cache
 
         # Initialize CoRal loader
         self.loader = CoralDataLoader(
@@ -46,6 +49,11 @@ class TTSDataset(Dataset):
 
         # Build speaker mapping
         self._build_speaker_mapping()
+
+        # Cache phonemes if requested (for thread safety during validation)
+        self.phoneme_cache = {}
+        if use_phoneme_cache:
+            self._cache_all_phonemes()
 
     def _build_speaker_mapping(self):
         """Build mapping from speaker_id string to integer."""
@@ -63,6 +71,16 @@ class TTSDataset(Dataset):
         }
 
         print(f"Found {len(speakers)} unique speakers: {sorted(speakers)}")
+
+    def _cache_all_phonemes(self):
+        """Pre-compute all phonemes to avoid espeak-ng threading issues."""
+        print("Caching phonemes for validation (espeak-ng thread safety)...")
+        for idx in range(len(self)):
+            item = self.loader[idx]
+            text = item["text"]
+            phonemes, phoneme_ids = self.g2p(text)
+            self.phoneme_cache[idx] = (phonemes, phoneme_ids)
+        print(f"Cached {len(self.phoneme_cache)} phoneme conversions")
 
     def __len__(self) -> int:
         """Return total number of samples."""
@@ -84,9 +102,12 @@ class TTSDataset(Dataset):
         # Load from CoRal
         item = self.loader[idx]
 
-        # Convert text to phoneme IDs
-        text = item["text"]
-        phonemes, phoneme_ids = self.g2p(text)
+        # Convert text to phoneme IDs (use cache if available)
+        if self.use_phoneme_cache and idx in self.phoneme_cache:
+            phonemes, phoneme_ids = self.phoneme_cache[idx]
+        else:
+            text = item["text"]
+            phonemes, phoneme_ids = self.g2p(text)
 
         # Convert speaker to int
         speaker_str = item["speaker_id"]
