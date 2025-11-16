@@ -110,11 +110,11 @@ class StyleTTS2Model(nn.Module):
         Args:
             phoneme_ids: [batch, seq_len]
             speaker_ids: [batch]
-            ref_audio: [batch, audio_len] - reference audio for style
+            ref_audio: [batch, audio_len] - reference audio for style and reconstruction target
             phoneme_lengths: [batch] - actual lengths
 
         Returns:
-            Dictionary with model outputs
+            Dictionary with model outputs (predicted/target mels will be cropped to match)
         """
         batch_size, seq_len = phoneme_ids.shape
 
@@ -201,6 +201,18 @@ class StyleTTS2Model(nn.Module):
         # Target mel from reference audio
         if ref_audio is not None:
             target_mel = mel_transform(ref_audio)
+
+            # Match dimensions - crop or pad to match lengths
+            pred_time = predicted_mel.shape[2]
+            target_time = target_mel.shape[2]
+
+            if pred_time > target_time:
+                # Crop predicted to match target
+                predicted_mel = predicted_mel[:, :, :target_time]
+                predicted_audio = predicted_audio[:, :target_time * 300]  # 300 = hop_length
+            elif pred_time < target_time:
+                # Crop target to match predicted
+                target_mel = target_mel[:, :, :pred_time]
         else:
             target_mel = predicted_mel.detach()
 
