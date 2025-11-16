@@ -74,12 +74,30 @@ class TTSDataset(Dataset):
 
     def _cache_all_phonemes(self):
         """Pre-compute all phonemes to avoid espeak-ng threading issues."""
+        import time
         print("Caching phonemes for validation (espeak-ng thread safety)...")
-        for idx in range(len(self)):
-            item = self.loader[idx]
-            text = item["text"]
-            phonemes, phoneme_ids = self.g2p(text)
-            self.phoneme_cache[idx] = (phonemes, phoneme_ids)
+
+        # Process in smaller batches with delays to avoid espeak-ng crashes
+        batch_size = 100
+        for i in range(0, len(self), batch_size):
+            end_idx = min(i + batch_size, len(self))
+
+            for idx in range(i, end_idx):
+                item = self.loader[idx]
+                text = item["text"]
+                try:
+                    phonemes, phoneme_ids = self.g2p(text)
+                    self.phoneme_cache[idx] = (phonemes, phoneme_ids)
+                except Exception as e:
+                    print(f"Warning: Failed to cache phonemes for idx {idx}: {e}")
+                    # Use dummy phonemes as fallback
+                    self.phoneme_cache[idx] = ("", [0])
+
+            # Small delay between batches to let espeak-ng reset
+            if i + batch_size < len(self):
+                time.sleep(0.1)
+                print(f"  Cached {min(i + batch_size, len(self))}/{len(self)} samples...")
+
         print(f"Cached {len(self.phoneme_cache)} phoneme conversions")
 
     def __len__(self) -> int:

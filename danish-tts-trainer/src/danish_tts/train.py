@@ -33,7 +33,7 @@ def setup_model(config: dict) -> nn.Module:
     raise NotImplementedError("Integrate StyleTTS2 model from yl4579/StyleTTS2")
 
 
-def setup_dataloader(config: dict, g2p, split: str = "train") -> DataLoader:
+def setup_dataloader(config: dict, g2p, split: str = "train", full_dataset=None) -> DataLoader:
     """
     Create data loader.
 
@@ -41,6 +41,7 @@ def setup_dataloader(config: dict, g2p, split: str = "train") -> DataLoader:
         config: Data configuration
         g2p: Danish G2P instance
         split: 'train' or 'val'
+        full_dataset: Pre-created dataset to use (avoids recreating)
 
     Returns:
         DataLoader instance
@@ -48,17 +49,18 @@ def setup_dataloader(config: dict, g2p, split: str = "train") -> DataLoader:
     from danish_tts.data.tts_dataset import TTSDataset
     from danish_tts.data.collate import collate_fn
 
-    data_dir = Path(config["data"]["coral_data_dir"])
+    if full_dataset is None:
+        data_dir = Path(config["data"]["coral_data_dir"])
 
-    # Use phoneme caching for validation to avoid espeak-ng threading issues
-    use_cache = (split == "val")
-
-    dataset = TTSDataset(
-        data_dir=data_dir,
-        g2p=g2p,
-        sample_rate=config["data"]["sample_rate"],
-        use_phoneme_cache=use_cache,
-    )
+        # Create dataset without caching (will cache separately)
+        dataset = TTSDataset(
+            data_dir=data_dir,
+            g2p=g2p,
+            sample_rate=config["data"]["sample_rate"],
+            use_phoneme_cache=False,
+        )
+    else:
+        dataset = full_dataset
 
     # Split dataset into train/val
     # For now, use 95/5 split
