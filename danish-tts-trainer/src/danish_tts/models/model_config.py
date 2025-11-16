@@ -128,14 +128,28 @@ class StyleTTS2Model(nn.Module):
         # Text encoding
         text_enc = self.text_encoder(phoneme_ids, phoneme_lengths, mask)  # [batch, channels, seq_len]
 
-        # Extract style from reference audio (placeholder mel extraction)
+        # Extract style from reference audio
         if ref_audio is not None:
-            # TODO: Extract mel spectrogram from audio
-            # For now, create dummy mel
-            mel = torch.zeros(batch_size, 1, 80, seq_len, device=phoneme_ids.device)
+            # Convert audio to mel spectrogram
+            import torchaudio.transforms as T
+            mel_transform = T.MelSpectrogram(
+                sample_rate=24000,
+                n_fft=2048,
+                hop_length=300,
+                n_mels=80,
+            ).to(ref_audio.device)
+
+            # ref_audio: [batch, audio_samples]
+            if ref_audio.ndim == 1:
+                ref_audio = ref_audio.unsqueeze(0)
+
+            mel = mel_transform(ref_audio)  # [batch, n_mels, time]
+            mel = mel.unsqueeze(1)  # [batch, 1, n_mels, time] for style encoder
+
             style = self.style_encoder(mel)  # [batch, style_dim]
         else:
-            style = torch.zeros(batch_size, 256, device=phoneme_ids.device)
+            # Random style if no reference
+            style = torch.randn(batch_size, 256, device=phoneme_ids.device)
 
         # Add speaker embedding if multi-speaker
         if self.n_speakers > 1 and speaker_ids is not None:
@@ -169,12 +183,38 @@ class StyleTTS2Model(nn.Module):
         # Note: decoder expects style as [batch, style_dim], not [batch, style_dim, 1]
         predicted_audio = self.decoder(text_enc_downsampled, F0_curve, N, style)  # [batch, audio_samples]
 
+        # Convert predicted audio to mel
+        import torchaudio.transforms as T
+        mel_transform = T.MelSpectrogram(
+            sample_rate=24000,
+            n_fft=2048,
+            hop_length=300,
+            n_mels=80,
+        ).to(predicted_audio.device)
+
+        # Compute mels from audio
+        if predicted_audio.ndim == 3:
+            predicted_audio = predicted_audio.squeeze(1)
+
+        predicted_mel = mel_transform(predicted_audio)  # [batch, n_mels, time]
+
+        # Target mel from reference audio
+        if ref_audio is not None:
+            target_mel = mel_transform(ref_audio)
+        else:
+            target_mel = predicted_mel.detach()
+
+        # For StyleTTS2, style is sampled from N(style_mean, style_log_var)
+        # For now, approximate: style_mean ≈ style, style_log_var ≈ 0
+        style_mean = style
+        style_log_var = torch.zeros_like(style)
+
         return {
-            "predicted_audio": predicted_audio.squeeze(1) if predicted_audio.ndim == 3 else predicted_audio,
-            "predicted_mel": torch.zeros(batch_size, 80, seq_len, device=phoneme_ids.device),  # Placeholder for compatibility
-            "target_mel": torch.zeros(batch_size, 80, seq_len, device=phoneme_ids.device),  # Placeholder
-            "style_mean": torch.zeros(batch_size, 256, device=phoneme_ids.device),
-            "style_log_var": torch.zeros(batch_size, 256, device=phoneme_ids.device),
+            "predicted_audio": predicted_audio,
+            "predicted_mel": predicted_mel,
+            "target_mel": target_mel,
+            "style_mean": style_mean,
+            "style_log_var": style_log_var,
             "durations": durations,
             "pitch": pitch,
         }
