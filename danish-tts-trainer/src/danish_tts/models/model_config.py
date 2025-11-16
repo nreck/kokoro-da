@@ -165,9 +165,10 @@ class StyleTTS2Model(nn.Module):
 
             # Ensure minimum size for style encoder (kernel_size=5 requires at least 5x5)
             # mel.shape = [batch, 1, n_mels=80, time]
-            # StyleEncoder has multiple downsampling layers, so we need enough frames
-            # to survive several stride-2 convolutions: 40 -> 20 -> 10 -> 5
-            min_time = 40  # Require at least 40 time frames
+            # StyleEncoder has 4x ResBlk(downsample='half') that divide BOTH dims by 2
+            # After 4 downsamplings: [1, 80, T] -> [dim, 5, T/16]
+            # Final Conv2d(5, 1, 0) needs at least 5x5, so T/16 >= 5 -> T >= 80
+            min_time = 80  # Require at least 80 time frames for 5 frames after downsampling
             _, _, n_mels, time_frames = mel.shape
             if time_frames < min_time:
                 pad_w = min_time - time_frames
@@ -234,8 +235,8 @@ class StyleTTS2Model(nn.Module):
         predicted_mel = mel_transform(predicted_audio)  # [batch, n_mels, time]
 
         # Ensure minimum mel size for any subsequent processing
-        # Match the minimum from style encoder (40 frames)
-        min_mel_time = 40
+        # Match the minimum from style encoder (80 frames for T/16 >= 5)
+        min_mel_time = 80
         if predicted_mel.shape[2] < min_mel_time:
             pad_w = min_mel_time - predicted_mel.shape[2]
             predicted_mel = torch.nn.functional.pad(predicted_mel, (0, pad_w, 0, 0), mode='constant', value=0)
