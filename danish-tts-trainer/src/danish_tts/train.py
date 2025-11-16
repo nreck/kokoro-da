@@ -90,6 +90,8 @@ def train_step(
     losses: dict,
     do_backward: bool = True,
     do_step: bool = True,
+    amp_context = None,
+    scaler = None,
 ) -> dict:
     """Single training step.
 
@@ -118,13 +120,22 @@ def train_step(
     phoneme_lengths = batch["phoneme_lengths"].to(device)
     audio_lengths = batch["audio_lengths"].to(device)
 
-    # Forward pass
-    outputs = model(
-        phoneme_ids=phoneme_ids,
-        speaker_ids=speaker_ids,
-        ref_audio=audio,  # Use ground truth as reference
-        phoneme_lengths=phoneme_lengths,
-    )
+    # Forward pass with mixed precision
+    if amp_context is not None:
+        with amp_context:
+            outputs = model(
+                phoneme_ids=phoneme_ids,
+                speaker_ids=speaker_ids,
+                ref_audio=audio,  # Use ground truth as reference
+                phoneme_lengths=phoneme_lengths,
+            )
+    else:
+        outputs = model(
+            phoneme_ids=phoneme_ids,
+            speaker_ids=speaker_ids,
+            ref_audio=audio,  # Use ground truth as reference
+            phoneme_lengths=phoneme_lengths,
+        )
 
     # Compute losses
     loss_weights = config["loss"]
@@ -161,18 +172,29 @@ def train_step(
     gradient_accumulation_steps = config["training"].get("gradient_accumulation_steps", 1)
     total_loss = total_loss / gradient_accumulation_steps
 
-    # Backward pass
+    # Backward pass with gradient scaling for AMP
     if do_backward:
-        total_loss.backward()
+        if scaler is not None:
+            scaler.scale(total_loss).backward()
+        else:
+            total_loss.backward()
 
     # Gradient clipping and optimizer step
     if do_step:
+        if scaler is not None:
+            scaler.unscale_(optimizer)  # Unscale before clipping
+
         if "grad_clip_norm" in config["training"]:
             torch.nn.utils.clip_grad_norm_(
                 model.parameters(),
                 config["training"]["grad_clip_norm"],
             )
-        optimizer.step()
+
+        if scaler is not None:
+            scaler.step(optimizer)
+            scaler.update()
+        else:
+            optimizer.step()
 
     return {
         "total_loss": total_loss.item() * gradient_accumulation_steps,  # Unscale for logging
@@ -358,6 +380,24 @@ def main():
         lr=config["training"]["learning_rate"],
     )
 
+    # Setup mixed precision training
+    use_amp = config["training"].get("use_amp", False)
+    amp_dtype = config["training"].get("amp_dtype", "float16")
+    scaler = None
+    amp_context = None
+
+    if use_amp:
+        if amp_dtype == "bfloat16" and torch.cuda.is_bf16_supported():
+            print("Using bfloat16 mixed precision training")
+            amp_context = torch.cuda.amp.autocast(dtype=torch.bfloat16)
+        else:
+            print("Using float16 mixed precision training")
+            amp_context = torch.cuda.amp.autocast(dtype=torch.float16)
+            scaler = torch.cuda.amp.GradScaler()
+    else:
+        print("Mixed precision training disabled")
+        amp_context = torch.cuda.amp.autocast(enabled=False)
+
     # Setup losses
     from danish_tts.losses import ReconstructionLoss, KLDivergenceLoss, AdversarialLoss, DurationLoss
     losses = {
@@ -438,11 +478,13 @@ def main():
             # Generator step (with gradient accumulation)
             is_accumulation_step = (accumulation_counter < gradient_accumulation_steps - 1)
 
-            # Pass gradient accumulation flags to train_step
+            # Pass gradient accumulation flags and AMP context to train_step
             loss_dict = train_step(
                 model, batch, optimizer, config, losses,
                 do_backward=True,  # Always backward for accumulation
-                do_step=not is_accumulation_step  # Only step when done accumulating
+                do_step=not is_accumulation_step,  # Only step when done accumulating
+                amp_context=amp_context,
+                scaler=scaler
             )
 
             # Only step optimizer after accumulating enough gradients
