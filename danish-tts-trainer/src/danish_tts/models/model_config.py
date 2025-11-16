@@ -143,8 +143,10 @@ class StyleTTS2Model(nn.Module):
             if ref_audio.ndim == 1:
                 ref_audio = ref_audio.unsqueeze(0)
 
-            # Ensure minimum audio length for STFT (n_fft=2048 requires at least 2048 samples)
-            min_len = 2048
+            # Ensure minimum audio length for STFT
+            # For 5x5 mel minimum with hop_length=300: need at least 5*300=1500 samples
+            # But add more margin for STFT window
+            min_len = 4096
             if ref_audio.shape[-1] < min_len:
                 pad_len = min_len - ref_audio.shape[-1]
                 ref_audio = torch.nn.functional.pad(ref_audio, (0, pad_len), mode='constant', value=0)
@@ -153,13 +155,13 @@ class StyleTTS2Model(nn.Module):
             mel = mel.unsqueeze(1)  # [batch, 1, n_mels, time] for style encoder
 
             # Ensure minimum size for style encoder (kernel_size=5 requires at least 5x5)
-            min_height, min_width = 5, 5
-            _, _, h, w = mel.shape
-            if h < min_height or w < min_width:
-                pad_h = max(0, min_height - h)
-                pad_w = max(0, min_width - w)
+            # mel.shape = [batch, 1, n_mels=80, time]
+            min_time = 10  # Require at least 10 time frames
+            _, _, n_mels, time_frames = mel.shape
+            if time_frames < min_time:
+                pad_w = min_time - time_frames
                 # Pad: (left, right, top, bottom)
-                mel = torch.nn.functional.pad(mel, (0, pad_w, 0, pad_h), mode='constant', value=0)
+                mel = torch.nn.functional.pad(mel, (0, pad_w, 0, 0), mode='constant', value=0)
 
             style = self.style_encoder(mel)  # [batch, style_dim]
         else:
@@ -211,17 +213,27 @@ class StyleTTS2Model(nn.Module):
         if predicted_audio.ndim == 3:
             predicted_audio = predicted_audio.squeeze(1)
 
-        # Ensure minimum audio length for STFT
-        min_len = 2048
+        # Ensure minimum audio length for STFT (match ref_audio padding)
+        min_len = 4096
         if predicted_audio.shape[-1] < min_len:
             pad_len = min_len - predicted_audio.shape[-1]
             predicted_audio = torch.nn.functional.pad(predicted_audio, (0, pad_len), mode='constant', value=0)
 
         predicted_mel = mel_transform(predicted_audio)  # [batch, n_mels, time]
 
+        # Ensure minimum mel size for any subsequent processing
+        if predicted_mel.shape[2] < 10:
+            pad_w = 10 - predicted_mel.shape[2]
+            predicted_mel = torch.nn.functional.pad(predicted_mel, (0, pad_w, 0, 0), mode='constant', value=0)
+
         # Target mel from reference audio
         if ref_audio is not None:
             target_mel = mel_transform(ref_audio)
+
+            # Ensure minimum mel size for target as well
+            if target_mel.shape[2] < 10:
+                pad_w = 10 - target_mel.shape[2]
+                target_mel = torch.nn.functional.pad(target_mel, (0, pad_w, 0, 0), mode='constant', value=0)
 
             # Match dimensions - crop or pad to match lengths
             pred_time = predicted_mel.shape[2]
