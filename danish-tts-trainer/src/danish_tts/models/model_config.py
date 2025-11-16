@@ -143,6 +143,12 @@ class StyleTTS2Model(nn.Module):
             if ref_audio.ndim == 1:
                 ref_audio = ref_audio.unsqueeze(0)
 
+            # Ensure minimum audio length for STFT (n_fft=2048 requires at least 2048 samples)
+            min_len = 2048
+            if ref_audio.shape[-1] < min_len:
+                pad_len = min_len - ref_audio.shape[-1]
+                ref_audio = torch.nn.functional.pad(ref_audio, (0, pad_len), mode='constant', value=0)
+
             mel = mel_transform(ref_audio)  # [batch, n_mels, time]
             mel = mel.unsqueeze(1)  # [batch, 1, n_mels, time] for style encoder
 
@@ -204,6 +210,12 @@ class StyleTTS2Model(nn.Module):
         # Compute mels from audio
         if predicted_audio.ndim == 3:
             predicted_audio = predicted_audio.squeeze(1)
+
+        # Ensure minimum audio length for STFT
+        min_len = 2048
+        if predicted_audio.shape[-1] < min_len:
+            pad_len = min_len - predicted_audio.shape[-1]
+            predicted_audio = torch.nn.functional.pad(predicted_audio, (0, pad_len), mode='constant', value=0)
 
         predicted_mel = mel_transform(predicted_audio)  # [batch, n_mels, time]
 
