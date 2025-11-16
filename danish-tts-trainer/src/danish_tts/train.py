@@ -259,8 +259,43 @@ def validate(
     Returns:
         Average validation loss
     """
-    # TODO: Implement validation
-    raise NotImplementedError("Implement validation")
+    model.eval()
+    total_loss = 0
+    num_batches = 0
+
+    device = next(model.parameters()).device
+
+    with torch.no_grad():
+        for batch in val_loader:
+            phoneme_ids = batch["phoneme_ids"].to(device)
+            audio = batch["audio"].to(device)
+            speaker_ids = batch["speaker_ids"].to(device)
+            phoneme_lengths = batch["phoneme_lengths"].to(device)
+
+            # Forward pass
+            outputs = model(
+                phoneme_ids=phoneme_ids,
+                speaker_ids=speaker_ids,
+                ref_audio=audio,
+                phoneme_lengths=phoneme_lengths,
+            )
+
+            # Compute reconstruction loss only for validation
+            loss = torch.nn.functional.l1_loss(
+                outputs["predicted_mel"],
+                outputs["target_mel"],
+            )
+
+            total_loss += loss.item()
+            num_batches += 1
+
+    avg_loss = total_loss / max(num_batches, 1)
+
+    # Log to tensorboard
+    writer.add_scalar("val/loss", avg_loss, step)
+
+    model.train()
+    return avg_loss
 
 
 def main():
